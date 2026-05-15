@@ -1,4 +1,4 @@
-/* Spectator Research Wiki — static export  */
+/* Hamilton Gazetteer — static export  */
 
 :root {
     --text:      #1a1a1a;
@@ -176,6 +176,20 @@ blockquote strong  { color: #1e40af; }
 .toc ul   { margin: 0.2rem 0; padding-left: 1.25rem; }
 .toc li   { margin: 0.15rem 0; }
 .toc a    { color: var(--accent); }
+
+/* ── Disclaimer ── */
+.disclaimer {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.78rem;
+    color: var(--muted);
+    background: #f8f8f6;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.45rem 0.75rem;
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+}
+.disclaimer a { color: var(--muted); text-decoration: underline; }
 
 /* ── Footer ── */
 .site-footer {
