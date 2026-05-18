@@ -7,6 +7,10 @@
 **Project:** `research-wiki-test` (Hamilton Gazetteer)  
 **Tooling:** `mnemotron-wiki-r` + Claude Code (Claude Sonnet 4.6)
 
+Copyright (C) 2026 Patrick R. Wallace. Permission is granted to copy, distribute and/or modify this document under the terms of the GNU Free Documentation License, Version 1.3 or any later version published by the Free Software Foundation; with no Invariant Sections, no Front-Cover Texts, and no Back-Cover Texts. Full license text: <https://www.gnu.org/licenses/fdl-1.3.html>
+
+*AI assistance notice: This document was drafted with assistance from Claude Code (Anthropic, claude-sonnet-4-6). The author reviewed, edited, and takes responsibility for the content.*
+
 ---
 
 ## Contents
@@ -26,7 +30,7 @@
 
 ## 1. What Was Built
 
-The Hamilton Gazetteer is a structured knowledge base — a searchable, cross-referenced encyclopedia of Hamilton College's institutional history — produced by processing approximately 3,500 primary source documents into a collection of 3,508 source transcriptions, 60 synthesized topic essays, and 410 entity profiles. The primary sources span two centuries (1793–2025) and include:
+The Hamilton Gazetteer is a structured knowledge base — a searchable, cross-referenced encyclopedia of Hamilton College's institutional history — produced by processing approximately 3,500 primary source documents into a collection of 3,510 source transcriptions, 72 synthesized topic essays, and 410 entity profiles. The primary sources span two centuries (1793–2025) and include:
 
 - 1,113 issues of *Hamilton Life* (1899–1942), the college's original student newspaper
 - 78 issues of *Hamiltonews* (1942–1947)
@@ -54,7 +58,7 @@ This document explains how.
 - Keep a log of everything it has processed
 - Never accidentally process the same document twice
 
-The "assistant" doing the actual reading and writing is Claude Code — Anthropic's AI system operating through the command line. The scripts handle the mechanical parts (finding files, extracting text, keeping records); Claude handles the interpretive parts (understanding what a document is about, what topics it touches, and how to integrate its findings into the broader knowledge base).
+The "librarian" doing the actual reading and writing is Claude Code — Anthropic's AI system operating through the command line. The scripts handle the mechanical parts (finding files, extracting text, keeping records); Claude handles the interpretive parts (understanding what a document is about, what topics it touches, and how to integrate its findings into the broader knowledge base).
 
 The end result is a wiki: a collection of interlinked markdown files that can be browsed on disk or exported to a self-contained website (via `wiki_export.py`).
 
@@ -188,7 +192,7 @@ The reported `ocr_method` in source page frontmatter records which engine(s) wer
 5. Writes `wiki/sources/<slug>.md`
 6. Updates `.manifest.json` after every file (crash-safe incremental progress)
 
-**Corpus-specific page generators** can be registered in `_build_page()`. The script ships with a generic `_document_page` fallback (derives a title from the filename, writes full text as content) and a `_csv_page` handler (records column names and row counts, includes a preview of the first 25 rows). To add custom formatting for a corpus with a distinctive naming convention (e.g., `hamilton-life-YYYY-MM-DD_djvu.txt`), add a conditional branch to `_build_page()` and write a generator function that parses the date and constructs a structured title.
+**Corpus-specific page generators** can be registered in `_build_page()`. The script ships with a generic `_document_page` fallback (derives a title from the filename, writes full text as content) and a `_csv_page` handler (records column names and row counts, includes a preview of the first 25 rows). The scaffolding and instructions for adding custom generators are in the file, but no corpus-specific generators have been added for the Hamilton Gazetteer — this is a known improvement area. See Section 9.1.
 
 ### 4.5 Internet Archive ingest: `ia_ingest.py`
 
@@ -216,11 +220,30 @@ The task document is licensed CC0 (public domain) to enable free reuse and adapt
 
 ### 4.7 Keyword linking: `synthesize_links.py`
 
-`synthesize_links.py` is a mechanical first-pass synthesis tool. It reads each source page's `## Content` section, matches it against a configurable `TOPIC_MAP` (a list of topics with associated keywords and match thresholds), and appends a `## Related Topics` section to pages that lack one. This is the cheapest way to establish cross-references for a large batch: it runs in seconds, requires no API calls, and handles the bookkeeping so that the manual synthesis pass can focus on interpretation.
+`synthesize_links.py` is a mechanical first-pass synthesis tool. It reads each source page's `## Content` section, matches it against a topic map, and appends a `## Related Topics` section to pages that match. This is the cheapest way to establish cross-references for a large batch: it runs in seconds, requires no API calls, and handles the bookkeeping so that the manual synthesis pass can focus on interpretation.
 
-The `TOPIC_MAP` must be customized for each corpus. Each entry specifies a topic slug, display title, relative path, keyword list, and threshold. Compound phrases are preferred over single words for high-frequency terms ("student assembly" rather than "assembly") to reduce false positives.
+**The topic map is auto-generated at runtime** by reading all `wiki/topics/*.md` files and extracting keywords from each topic's H1 title, slug, and Overview section. This keeps the map in sync with the wiki without manual maintenance — adding a new topic page is sufficient; no edits to the script are needed. Compound phrases extracted from topic Overview text are preferred over single words to reduce false positives.
 
-### 4.8 Static export: `wiki_export.py`
+**Key flags:**
+
+| Flag | Effect |
+|------|--------|
+| *(none)* | Adds Related Topics to source pages that lack the section entirely |
+| `--rebuild` | Strips and regenerates Related Topics on every source page against the current map |
+| `--dry-run` | Shows what would change without writing |
+| `--show-map` | Prints the auto-generated topic map and exits |
+
+Run `--rebuild` after adding new topic pages to backfill cross-references across all existing source pages. For the Hamilton Gazetteer, a rebuild pass touches ~3,500 pages in about 30 seconds.
+
+### 4.8 Open questions aggregation: `scripts/open_questions.py`
+
+`open_questions.py` scans the `## Open Questions` section of every topic page, deduplicates, and writes a consolidated `wiki/OPEN-QUESTIONS.md` grouped by topic with links back to each topic page. It is run as part of Stage 3 (index update) after any synthesis pass. The output — currently 444 questions across 69 topics — is the primary research roadmap for identifying what the corpus does not yet answer.
+
+### 4.9 OCR quality reporting: `scripts/quality_report.py`
+
+`quality_report.py` reads all source page frontmatter and `## Notes` sections to produce aggregate OCR statistics: source counts by `ocr_method`, by document type, by publication title, and a list of pages flagged "Manual review recommended: yes." This is the primary tool for identifying which portions of the corpus need a closer look before a publication-quality export is produced.
+
+### 4.10 Static export: `wiki_export.py`
 
 `wiki_export.py` converts the markdown wiki to a self-contained static HTML site (the Hamilton Gazetteer). It uses the Python `markdown` library with extensions for tables, fenced code, table of contents, and typographic improvements. Each page gets a standard header (with navigation back to the index), a disclaimer attributing AI-assisted generation, and a footer. CSS is embedded in a single file. The export excludes source pages by default (there are ~3,500 of them); pass `--all` to include them.
 
@@ -238,9 +261,16 @@ The project began as a test of `mnemotron-wiki-r` on the Hamilton College Specta
 
 ### 5.2 Initial Spectator ingest (1947–2025)
 
-The first large ingest processed the Spectator corpus — hundreds of issues covering the period 1947 to 2025. Claude Code ran the four-stage ingest task (corpus assessment → document ingest → index update → git commit) on batches of issues. For batches of 50+ files, the Stage 0 taxonomy pass was critical: Claude established topic pages for major institutional themes before processing any source files, preventing source pages from becoming disconnected islands.
+The first large ingest processed the Spectator corpus — hundreds of issues covering 1947 to 2025. Claude Code ran the four-stage ingest task (corpus assessment → document ingest → index update → git commit) on batches of issues. For batches of 50+ files, the Stage 0 taxonomy pass was critical: Claude established topic pages for major institutional themes before processing any source files, preventing source pages from becoming disconnected islands.
 
-The per-file synthesis approach was applied to the 1947–1980 period; for 1981–2025, five parallel synthesis agents ran simultaneously, each covering a date range and targeting non-overlapping topic pages. This is a pattern the task document explicitly supports: agents writing to different topics can safely run in parallel because they are unlikely to edit the same file at the same time.
+**Per-file synthesis was applied to every issue** — not just a sample. For the 1947–1980 period, issues were processed sequentially with a full per-file synthesis pass (each issue read completely, all relevant topics updated). For 1981–2025, five parallel synthesis agents ran simultaneously, each covering a distinct date range and writing to non-overlapping topic pages. This is a pattern the task document explicitly supports: agents writing to different topics can safely run in parallel because they are unlikely to edit the same file at the same time.
+
+**The parallel agent pattern** requires careful setup. Each agent was given:
+- A precise list of source files derived from targeted grep searches across the corpus
+- The names of the specific topic pages it should write to
+- Explicit instructions to use `Edit` (not `Write`) and to re-read the current file state before editing
+
+Under-specified agents — those given only a date range and no file list or target topic map — tend to duplicate prior work or conflict with each other. Specificity is the key to safe parallelism. After all agents complete, `synthesize_links.py --rebuild` is run to backfill Related Topics cross-references across all source pages against the updated topic map.
 
 ### 5.3 Broadening the corpus
 
@@ -250,7 +280,7 @@ After the Spectator was ingested, the corpus was expanded in successive rounds:
 
 **Wikipedia exports:** Wikipedia pages for notable alumni and affiliates were downloaded as HTML and ingested. These added 12 new entity pages and expanded three existing ones. The HTML extractor in `extract_text.py` stripped navigation and advertising, leaving clean biographical text.
 
-**Hamilton Life archive (1899–1942):** 1,242 issues of the college's original student newspaper were downloaded as djvu.txt files from Internet Archive and placed in `ingest/`. This was the largest single ingest: `batch_ingest.py` processed all 1,242 files in a single run, creating 1,242 source pages. Claude then ran a synthesis pass on a representative sample (earliest, latest, and mid-range issues plus issues flagged as thematically rich in the Stage 0 sample read), producing the comprehensive Hamilton Life Archive topic essay.
+**Hamilton Life archive (1899–1942):** 1,113 issues of the college's original student newspaper were downloaded as djvu.txt files from Internet Archive and placed in `ingest/`. This was the largest single ingest: `batch_ingest.py` processed all files in a single run, creating 1,113 source pages. Claude then ran a synthesis pass on a representative sample (earliest, latest, and mid-range issues plus issues flagged as thematically rich in the Stage 0 sample read), producing the comprehensive Hamilton Life Archive topic essay.
 
 **Course catalogs (1814–2025):** 205 catalogs were ingested, creating the Course Catalogs Collection and Curriculum and Academic Departments topic pages. Catalogs from the early 19th century are particularly useful for tracking which subjects were taught when.
 
@@ -270,12 +300,31 @@ Each agent was given: the question it was answering, the grep commands needed to
 ### 5.5 Consolidation and cleanup
 
 Several topic pages were created as era-specific stubs during the breadth pass and later consolidated:
-- Three environmental activism era stubs were merged into a single `environmental-activism-and-sustainability.md`
-- Two computing era stubs were merged into `computing-and-technology-at-hamilton.md`
 
-Consolidation was done by a dedicated agent that read all three source stubs, synthesized them into a unified page, and deleted the stubs.
+- **Five overlapping environmental stub pages** (`environmental-activism-1988-1995.md`, `environmental-activism-heag.md`, `environmental-activism-and-sustainability.md`, `heag-and-campus-sustainability.md`, and the original canonical) were merged into a single `environmental-sustainability-and-climate-action.md` covering the full 1972–2022 arc, with new content added from HEAG sources.
+- **Three computing pages** (two era stubs plus a canonical page) were consolidated into `computing-and-technology-at-hamilton.md`; the stubs were expanded with new content from source files before becoming redirects.
 
-### 5.6 Export
+Consolidation was done by a dedicated agent that read all source stubs, synthesized their content into the canonical unified page, and converted the stubs to **redirect pages** (not deleted). Redirect pages contain a brief notice and link pointing to the canonical page, which keeps any existing incoming links functional and makes the merge history legible.
+
+### 5.6 Expansion: new topic pages via targeted corpus sweeps
+
+After the initial breadth pass was complete, a second round of synthesis targeted specific topic gaps identified during depth passes. For each gap, the approach was:
+
+1. Run targeted grep commands across all 3,510 source pages to find every source containing relevant terms
+2. Group matches into era-based file lists (e.g., 1947–1969, 1970–1989, 1990–2009, 2010–2025)
+3. Launch one parallel synthesis agent per new topic, giving it the complete file list and instructions to write a new topic page with Key Points, Sources table, Open Questions, and Related Topics sections
+4. After all agents complete: run `synthesize_links.py --rebuild` to backfill Related Topics on all source pages, then run `scripts/open_questions.py` to regenerate `wiki/OPEN-QUESTIONS.md`
+
+Topics added in this expansion round:
+
+- **Residential Life and Campus Housing** — full sweep 1947–2020; covers the fraternity-dominated housing era, Kirkland opening, coed housing experiments, special-interest houses, Beinecke Village, and the REAL Program
+- **International Students and ISA** — full sweep; note: the organization is the International Students *Association* (ISA), not Council — "ISC" in these sources refers to the Inter-Society Council (fraternity/sorority governing body); covers ISA programming, advocacy moments, post-9/11 visa rule changes, and the "From Where I Sit" column
+- **Free Speech and Academic Freedom** — full sweep; covers the Ward Churchill (2005) and Susan Rosenberg (2004) controversies, the Kirkland Project founding and restructuring, and the founding of the Alexander Hamilton Center
+- **Palestine Solidarity and Campus Activism** — full sweep 1982–2025; covers the full arc from PLO/Israeli speaker debates through the 2023–2025 SJP organizing and divestment campaigns
+
+The same pattern — grep, group, parallel agents, rebuild — can be applied to any newly identified topic gap. The key constraint for parallelism is that agents must write to different files. If two topics share a target page, they must run sequentially.
+
+### 5.7 Export
 
 `wiki_export.py` was run to produce the Hamilton Gazetteer static site, exported to `hamilton-gazetteer/` (475 HTML files). During this step, the site was renamed from "Spectator Research Wiki" to "Hamilton Gazetteer" and a disclaimer was added crediting AI-assisted generation.
 
@@ -309,7 +358,7 @@ The scripts handle mechanics; Claude Code handles judgment. This distinction is 
 
 **Entity extraction:** Claude identifies which named individuals, organizations, and places are substantively present in a source (not merely mentioned in passing) and creates or updates entity pages. It determines the appropriate level of detail for a given entity based on how central it is to the research questions.
 
-**Question formulation:** After each ingest pass, Claude populates the `## Open Questions` sections of topic pages with unresolved gaps it has noticed. These become the agenda for subsequent depth passes. This is perhaps the most underappreciated part of the workflow: a well-maintained Open Questions section is a research roadmap.
+**Question formulation:** After each ingest pass, Claude populates the `## Open Questions` sections of topic pages with unresolved gaps it has noticed. These become the agenda for subsequent depth passes. A well-maintained Open Questions section is a research roadmap.
 
 ### The interaction model
 
@@ -334,10 +383,10 @@ At the time of documentation, the Hamilton Gazetteer contains:
 
 | Content type | Count | Coverage |
 |-------------|-------|---------|
-| Source transcriptions | 3,508 | ~3,500 primary documents, 1793–2025 |
-| Topic essays | 60 | Institutional history, campus life, notable events, people and culture |
+| Source transcriptions | 3,510 | ~3,500 primary documents, 1793–2025 |
+| Topic essays | 72 (66 active, 6 redirect stubs) | Institutional history, campus life, notable events, people and culture |
 | Entity profiles | 410 | Notable alumni, faculty, administrators, organizations, buildings |
-| Synthesis coverage | Comprehensive | Full per-file synthesis 1947–1980; parallel synthesis agents 1981–2025; deep passes on specific topics |
+| Synthesis coverage | Comprehensive | Full per-file synthesis 1947–2025 via parallel agents; deep passes on BLSU/divestment/athletics; targeted topic sweeps for residential life, free speech, Palestine, international students |
 
 ### What makes a good wiki page
 
@@ -425,59 +474,44 @@ These are areas where the current implementation has known limitations and where
 
 ### 9.1 Corpus-specific source page generators
 
-**Current state:** `batch_ingest.py` ships with a generic page generator (`_document_page`) that derives a title from the filename and writes full text as content. For a corpus with a consistent naming convention (like `hamilton-life-YYYY-MM-DD_djvu.txt`), this produces pages titled "Hamilton Life 1903 09 26 Djvu" instead of "Hamilton Life, September 26, 1903."
+**Current state:** `batch_ingest.py` ships with a generic page generator (`_document_page`) that derives a title from the filename and writes full text as content. For a corpus with a consistent naming convention (like `spec-YYYY-MM-DD-djvu.txt`), this produces pages titled "Spec 2006 10 27 Djvu" instead of "The Spectator, October 27, 2006." The script includes scaffolding and instructions for adding custom generators, but none have been written for the Hamilton Gazetteer corpus.
 
-**Improvement:** The Hamilton Gazetteer project should add a corpus-specific generator to `_build_page()` in `batch_ingest.py` that parses the date from the filename, constructs a human-readable title, records the date in frontmatter, and assigns appropriate tags (publication title, decade, era) automatically. This would improve source page titles and make date-range searches possible without reading every page.
+**Improvement:** Add corpus-specific generators to `_build_page()` in `batch_ingest.py` that parse the date from the filename, construct human-readable titles, record the date in frontmatter, and assign appropriate tags (publication title, decade, era) automatically. This would improve source page titles and make date-range searches possible without reading every page.
 
 **General pattern for adaptation:** Any corpus with a meaningful naming convention should register a custom generator. The pattern is:
 ```python
 # In _build_page():
-if re.match(r"hamilton-life-\d{4}-\d{2}-\d{2}", filepath.stem):
-    return _hamilton_life_page(filepath, text, slug)
+if re.match(r"spec-\d{4}-\d{2}-\d{2}", filepath.stem):
+    return _spectator_page(filepath, text, slug)
 ```
 
 ### 9.2 Structured metadata extraction
 
-**Current state:** Source page frontmatter records basic provenance (title, type, OCR method, ingest date, original file). It does not record structured metadata like publication date, author, volume/issue numbers, or subject terms.
+**Current state:** Source page frontmatter records basic provenance (title, type, OCR method, ingest date, original file). It does not record structured metadata like publication date, author, or volume/issue numbers.
 
-**Improvement:** For newspaper corpora, add YAML frontmatter fields for `publication_date`, `publication`, `volume`, `issue`. For course catalogs, add `academic_year`. Structured dates would enable timeline navigation in the static export; structured publication fields would enable filtering by source type. Claude can infer most of these from document content or filename during ingest.
+**Improvement:** For newspaper corpora, add YAML frontmatter fields for `publication_date`, `publication`, `volume`, `issue`. For course catalogs, add `academic_year`. Structured dates would enable timeline navigation in the static export; structured publication fields would enable filtering by source type. Claude can infer most of these from document content or filename during ingest. This pairs naturally with corpus-specific generators (9.1) — a well-written generator would populate these fields automatically.
 
-### 9.3 The topic map in `synthesize_links.py`
+### 9.3 Embedding-based topic linking
 
-**Current state:** The `TOPIC_MAP` in `synthesize_links.py` is a static Python list that must be edited by hand before running. It is good enough for establishing initial cross-references but becomes outdated as new topics are created and does not reflect the nuance of Claude's full synthesis.
+**Current state:** `synthesize_links.py` uses keyword matching to link source pages to topic pages. This catches explicit mentions but misses implicit connections — a source about "the hill" might be related to "campus buildings" even if neither keyword appears literally.
 
-**Improvement (near-term):** Auto-generate the `TOPIC_MAP` from the existing topic pages at run time, using their titles and any keywords extracted from their Overview sections. This would keep the map in sync with the wiki without manual updates.
+**Improvement:** Replace or supplement keyword matching with embedding-based semantic search. Compute embeddings for source page content and topic page content; link source pages to the most semantically similar topic pages above a similarity threshold. This would improve recall significantly for sources that use period-specific vocabulary or indirect language.
 
-**Improvement (longer-term):** Replace keyword matching with embedding-based semantic search. Compute embeddings for source page content and topic page content; link source pages to the most semantically similar topic pages above a similarity threshold. This would catch relevant connections that keyword matching misses (a source about "the hill" might be related to "campus buildings" even if neither keyword appears literally).
-
-### 9.4 The static export and finding aid output
+### 9.4 Finding aid and catalog export formats
 
 **Current state:** `wiki_export.py` produces a clean static HTML site suitable for browsing. It does not produce any of the standard archival finding aid formats (EAD, Dublin Core, MODS, MARC) that would integrate with institutional discovery systems.
 
 **Improvement:** Add export modes for:
 - **EAD XML:** Use source page frontmatter and content to generate an Encoded Archival Description finding aid. Title, date, extent, scope/content, and subject terms are all available in the wiki's structured data.
 - **Dublin Core CSV:** A simple spreadsheet format for each source page: title, date, creator (publication/author), description (Source Information section), subject terms (tags), identifier (original_file/IA identifier).
-- **MARC records:** More complex, but achievable for the entity and topic pages that represent significant archival collections.
 
 For a library context, the most immediate practical value would be Dublin Core export: a CSV that can be imported into ArchivesSpace, AtoM, or ContentDM to make the Gazetteer's contents discoverable through the library's standard catalog.
 
-### 9.5 Open Questions management
-
-**Current state:** `wiki/OPEN-QUESTIONS.md` is regenerated manually at the end of deep synthesis passes. It is not automatically maintained.
-
-**Improvement:** A script that scans all `## Open Questions` sections across topic pages, deduplicates, groups by theme, and rewrites `OPEN-QUESTIONS.md` — run automatically as part of Stage 3 (the index update stage). This would make the research agenda visible and current after every ingest run.
-
-### 9.6 Parallel agent coordination
+### 9.5 Parallel agent coordination
 
 **Current state:** Parallel synthesis agents are launched by hand with carefully specified prompts. There is no formal mechanism to track which agents are running, which topic pages they are writing to, or whether they conflict.
 
 **Improvement:** A lightweight coordination manifest (a JSON file listing active agents and their target pages) that each agent reads before starting and writes to on completion. This would allow Claude Code to detect conflicts before they happen and alert the user if two agents claim the same target page.
-
-### 9.7 Quality tracking
-
-**Current state:** Source page frontmatter records `ocr_method` but there is no aggregate view of OCR quality across the corpus.
-
-**Improvement:** A `quality_report.py` script that reads all source pages, aggregates OCR method counts, identifies pages flagged for manual review in their `## Notes` sections, and produces a summary. For the Hamilton Gazetteer, this would identify which Life issues had the worst scan quality and need a manual review pass.
 
 ---
 
@@ -513,7 +547,7 @@ For IA collections: create `ingest/ia-sources/search.csv` with one identifier pe
 
 For local files: copy or symlink them into `ingest/`.
 
-**Do not delete originals yet.** The tool deletes originals from `ingest/` after processing by design (for scans and PDFs); the markdown source pages are the canonical retained form. But retain your local copies elsewhere until you have verified the wiki pages are correct.
+**Do not delete originals.** The tool does not remove files from `ingest/` after processing; the markdown source pages are the canonical retained form. Retain your local copies elsewhere until you have verified the wiki pages are correct.
 
 ### Step 4: Run Stage 0 before processing any files
 
@@ -535,13 +569,17 @@ For large corpora (1,000+ files), process in batches:
 
 Do not wait until all source pages are created before synthesizing. Synthesis guides subsequent ingestion: if the first 100 issues of a newspaper establish that the 1920s are particularly rich in a given topic, you know to look more carefully at 1920s issues as they are ingested.
 
-### Step 6: Customize for your corpus
+### Step 6: Use parallel agents for large synthesis passes
 
-The two most impactful customizations are:
+Once the topic taxonomy is established and source pages exist, parallel agents dramatically accelerate synthesis of large corpora. The pattern:
 
-**Custom source page generator:** If your corpus has a consistent naming convention, add a generator to `_build_page()` in `batch_ingest.py`. A 30-line function that parses the date from a filename and constructs a clean title will make a dramatic difference in the readability of source pages.
+1. Grep the source corpus for terms related to each topic you want to develop
+2. Group results by era (e.g., pre-1970, 1970–1990, 1990–2010, 2010–present)
+3. Launch one agent per topic (not per era), giving each a complete file list and the name of its target topic page
+4. After all agents complete, run `python synthesize_links.py --rebuild` and `python scripts/open_questions.py`
+5. Commit everything in a single commit with a descriptive message
 
-**Custom topic map:** Edit `TOPIC_MAP` in `synthesize_links.py` to reflect your actual topics. Plan for about 30 minutes to identify the recurring themes in your corpus (from the Stage 0 assessment) and translate them into keyword lists.
+The essential constraint: each agent must write to a different set of files. Two agents writing to the same topic page will produce conflicts. If a topic requires contributions from multiple agents, run them sequentially.
 
 ### Step 7: Iterate between breadth and depth
 
@@ -557,7 +595,9 @@ The wiki is most useful as a living document, not a one-time product. When new m
 1. Add it to `ingest/`
 2. Run `batch_ingest.py` (or `ia_ingest.py`)
 3. Run a Claude synthesis pass
-4. Commit
+4. Run `python synthesize_links.py --rebuild`
+5. Run `python scripts/open_questions.py`
+6. Commit
 
 The manifest system means there is no risk of reprocessing files you have already handled. New material is seamlessly integrated into existing topic and entity pages.
 
@@ -577,12 +617,12 @@ The export is a static HTML site with no server-side dependencies. It can be hos
 
 | Metric | Value |
 |--------|-------|
-| Wiki source pages | 3,508 |
-| Topic essays | 60 |
+| Wiki source pages | 3,510 |
+| Topic essays | 72 (66 active, 6 redirect stubs) |
 | Entity profiles | 410 |
-| Primary sources by type | ~1,242 Hamilton Life; ~78 Hamiltonews; ~hundreds of Spectator; 205 catalogs; 1 documentary history; ~19 Wikipedia exports; 78+ YHM archive items |
+| Primary sources by type | ~1,113 Hamilton Life; ~78 Hamiltonews; ~hundreds of Spectator; 205 catalogs; 1 documentary history; ~19 Wikipedia exports; 78+ YHM archive items |
 | Date range covered | 1793–2025 |
-| Synthesis coverage | Complete (1947–2025 full synthesis; 1899–1942 comprehensive breadth + sample-based depth; 1793–1922 documentary sources) |
+| Synthesis coverage | Complete (1947–2025 full per-file synthesis via parallel agents; 1899–1942 comprehensive breadth + sample-based depth; 1793–1922 documentary sources; targeted topic sweeps for residential life, free speech, Palestine solidarity, international students) |
 | Git commits | Multiple; history in `research-wiki-test/.git/` |
 | Static export | `hamilton-gazetteer/` (475 HTML files) |
 
@@ -594,7 +634,7 @@ The export is a static HTML site with no server-side dependencies. It can be hos
 |------|---------|
 | `mnemotron-wiki-r/batch_ingest.py` | Bulk source page creation from local files |
 | `mnemotron-wiki-r/ia_ingest.py` | Source page creation from Internet Archive items |
-| `mnemotron-wiki-r/synthesize_links.py` | Keyword-based topic cross-referencing |
+| `mnemotron-wiki-r/synthesize_links.py` | Auto-generated topic cross-referencing (runtime TOPIC_MAP; `--rebuild` flag) |
 | `mnemotron-wiki-r/scripts/config.py` | Central configuration (paths, OCR settings) |
 | `mnemotron-wiki-r/scripts/extract_text.py` | Text extraction from native document formats |
 | `mnemotron-wiki-r/scripts/ocr.py` | Tiered OCR: Tesseract + Claude Vision fallback |
@@ -602,6 +642,8 @@ The export is a static HTML site with no server-side dependencies. It can be hos
 | `mnemotron-wiki-r/scripts/check_ingest.py` | Lists unprocessed files in `ingest/` |
 | `research-wiki-test/RESEARCH_WIKI_TASK.md` | Claude Code operating instructions for the ingest task |
 | `research-wiki-test/wiki_export.py` | Markdown to static HTML export |
+| `research-wiki-test/scripts/open_questions.py` | Regenerates `wiki/OPEN-QUESTIONS.md` from all topic pages |
+| `research-wiki-test/scripts/quality_report.py` | OCR quality summary; flags pages for manual review |
 | `research-wiki-test/.manifest.json` | Ingest history (committed to git) |
 | `research-wiki-test/ingest/ia-sources/processed.json` | IA identifier log |
 | `research-wiki-test/wiki/` | The wiki itself: sources/, topics/, entities/, INDEX.md |
@@ -627,6 +669,10 @@ The export is a static HTML site with no server-side dependencies. It can be hos
 
 **OCR (Optical Character Recognition):** The process of converting a scanned image of text into machine-readable text. Tesseract is the offline OCR engine used in this system; Claude Vision is the fallback for pages Tesseract cannot read.
 
+**Parallel agent:** A Claude Code agent running simultaneously with one or more others, each assigned to a distinct set of target files or topic pages. Safe when agents write to non-overlapping files; requires care when topics share target pages.
+
+**Redirect page:** A topic page that was superseded by a canonical page. Contains a brief notice and link to the canonical page; preserved (not deleted) to keep incoming links functional.
+
 **Source page:** A wiki page containing the extracted or transcribed text of a single source document, along with provenance metadata.
 
 **Topic page:** A wiki page synthesizing findings across multiple source pages on a common theme. Contains Overview, Key Points, Open Questions, Sources table, and Related Topics.
@@ -635,6 +681,3 @@ The export is a static HTML site with no server-side dependencies. It can be hos
 
 ---
 
-*This document is dedicated to the public domain under CC0 1.0 Universal. Full text: https://creativecommons.org/publicdomain/zero/1.0/*
-
-*AI assistance notice: This document was drafted with assistance from Claude Code (Anthropic, claude-sonnet-4-6). The author reviewed, edited, and takes responsibility for the content.*
