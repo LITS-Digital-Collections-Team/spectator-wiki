@@ -54,7 +54,7 @@ This document explains how.
 - Keep a log of everything it has processed
 - Never accidentally process the same document twice
 
-The "librarian" doing the actual reading and writing is Claude Code — Anthropic's AI system operating through the command line. The scripts handle the mechanical parts (finding files, extracting text, keeping records); Claude handles the interpretive parts (understanding what a document is about, what topics it touches, and how to integrate its findings into the broader knowledge base).
+The "assistant" doing the actual reading and writing is Claude Code — Anthropic's AI system operating through the command line. The scripts handle the mechanical parts (finding files, extracting text, keeping records); Claude handles the interpretive parts (understanding what a document is about, what topics it touches, and how to integrate its findings into the broader knowledge base).
 
 The end result is a wiki: a collection of interlinked markdown files that can be browsed on disk or exported to a self-contained website (via `wiki_export.py`).
 
