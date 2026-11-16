@@ -6,6 +6,7 @@
 **Date:** 2026-05-18  
 **Project:** `research-wiki-test` (Hamilton Gazetteer)  
 **Tooling:** `mnemotron-wiki-r` + Claude Code (Claude Sonnet 4.6)
+
 **Live Demo** <https://lits-digital-collections-team.github.io/spectator-wiki/index.html>
 
 Copyright (C) 2026 Patrick R. Wallace. Permission is granted to copy, distribute and/or modify this document under the terms of the GNU Free Documentation License, Version 1.3 or any later version published by the Free Software Foundation; with no Invariant Sections, no Front-Cover Texts, and no Back-Cover Texts. Full license text: <https://www.gnu.org/licenses/fdl-1.3.html>
